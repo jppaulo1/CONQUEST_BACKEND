@@ -452,10 +452,97 @@ app.post('/api/partidas/:partidaId/habilidades/desbloquear', async (req, res) =>
     res.status(500).json({ success: false, error: 'Error interno al intentar desbloquear la habilidad.', detail: error.message });
   }
 });
+// =============================================================================
+// 10. GET /api/mapas — Devuelve todos los mapas disponibles
+// =============================================================================
+app.get('/api/mapas', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT mapa_id, nombre_mapa, nro_continentes, nro_paises FROM mapas ORDER BY mapa_id');
+    res.json(result.rows);
+  } catch (error) {
+    console.error('❌ Error en GET /api/mapas:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================================================
+// 11. GET /api/continentes?mapa_id=X — Devuelve continentes de un mapa
+// =============================================================================
+app.get('/api/continentes', async (req, res) => {
+  const { mapa_id } = req.query;
+  try {
+    let query = 'SELECT continente_id, mapa_id, nombre_continente FROM continentes';
+    const params = [];
+    if (mapa_id) {
+      query += ' WHERE mapa_id = $1';
+      params.push(parseInt(mapa_id));
+    }
+    query += ' ORDER BY continente_id';
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('❌ Error en GET /api/continentes:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================================================
+// 12. GET /api/paises-base — Devuelve todos los países base con datos geopolíticos
+//     Opcionalmente filtra por ?continente_id=X
+// =============================================================================
+app.get('/api/paises-base', async (req, res) => {
+  const { continente_id } = req.query;
+  try {
+    let query = `
+      SELECT 
+        pb.pais_id, pb.nombre_es, pb.continente_id,
+        pb.poblacion_real_tierra, pb.gdp_per_capita_base,
+        pb.ejercito_multiplicador,
+        pb.pct_composicion_infanteria, pb.pct_composicion_caballeria, pb.pct_composicion_artilleria,
+        pb.tasa_natalidad_diaria, pb.tasa_mortalidad_diaria,
+        pb.multiplicador_reclutamiento, pb.multiplicador_pesadas,
+        c.nombre_continente
+      FROM paises_base pb
+      JOIN continentes c ON pb.continente_id = c.continente_id
+    `;
+    const params = [];
+    if (continente_id) {
+      query += ' WHERE pb.continente_id = $1';
+      params.push(parseInt(continente_id));
+    }
+    query += ' ORDER BY pb.continente_id, pb.pais_id';
+    const result = await pool.query(query, params);
+
+    // Mapeo para garantizar tipos numéricos correctos (pg devuelve NUMERIC como string)
+    const paises = result.rows.map(row => ({
+      pais_id:                      row.pais_id,
+      nombre_es:                    row.nombre_es,
+      continente_id:                row.continente_id,
+      poblacion_real_tierra:        parseInt(row.poblacion_real_tierra),
+      gdp_per_capita_base:          parseInt(row.gdp_per_capita_base),
+      ejercito_multiplicador:       parseFloat(row.ejercito_multiplicador),
+      pct_composicion_infanteria:   parseFloat(row.pct_composicion_infanteria),
+      pct_composicion_caballeria:   parseFloat(row.pct_composicion_caballeria),
+      pct_composicion_artilleria:   parseFloat(row.pct_composicion_artilleria),
+      tasa_natalidad_diaria:        parseFloat(row.tasa_natalidad_diaria),
+      tasa_mortalidad_diaria:       parseFloat(row.tasa_mortalidad_diaria),
+      multiplicador_reclutamiento:  parseFloat(row.multiplicador_reclutamiento),
+      multiplicador_pesadas:        parseFloat(row.multiplicador_pesadas),
+      nombre_continente:            row.nombre_continente,
+    }));
+
+    res.json(paises);
+  } catch (error) {
+    console.error('❌ Error en GET /api/paises-base:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Arrancar servidor
 app.listen(PORT, () => {
   console.log(`🚀 Servidor Conquest escuchando en http://localhost:${PORT}`);
   console.log(`📡 Endpoint de control de conexión:  http://localhost:${PORT}/api/status`);
   console.log(`🌲 Tech Tree:                         http://localhost:${PORT}/api/habilidades`);
   console.log(`🔓 Desbloquear habilidad:             POST http://localhost:${PORT}/api/partidas/:id/habilidades/desbloquear`);
+  console.log(`🗺️  Países Base:                       http://localhost:${PORT}/api/paises-base`);
 });
