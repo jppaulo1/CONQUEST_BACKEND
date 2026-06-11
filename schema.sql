@@ -87,3 +87,11 @@ CREATE TABLE
         arbol_id SERIAL PRIMARY KEY,
         nombre_arbol VARCHAR(50) NOT NULL UNIQUE
     );
+
+-- Tropas
+CREATE TABLE tropas (
+    tropa_id SERIAL PRIMARY KEY,
+    nombre_tropa VARCHAR(50) NOT NULL UNIQUE,
+    costo_base INT NOT NULL CHECK (costo_base > 0),
+    multiplicador_combate NUMERIC(3,1) NOT NULL CHECK (multiplicador_combate >= 0.0)
+);
