@@ -8,3 +8,10 @@ CREATE TABLE habilidades (
     eje_x INT NOT NULL,                   -- Coordenadas para el Front
     eje_y INT NOT NULL
 );
+
+--Tabla asociativa para los prerrequisitos (Muchos a Muchos autorreferenciada)
+CREATE TABLE habilidad_prerrequisitos (
+    habilidad_id VARCHAR(50) REFERENCES habilidades(habilidad_id) ON DELETE CASCADE,
+    habilidad_requerida_id VARCHAR(50) REFERENCES habilidades(habilidad_id) ON DELETE CASCADE,
+    PRIMARY KEY (habilidad_id, habilidad_requerida_id)
+);
