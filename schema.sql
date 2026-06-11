@@ -15,3 +15,12 @@ CREATE TABLE habilidad_prerrequisitos (
     habilidad_requerida_id VARCHAR(50) REFERENCES habilidades(habilidad_id) ON DELETE CASCADE,
     PRIMARY KEY (habilidad_id, habilidad_requerida_id)
 );
+
+--Registro de qué partida tiene qué habilidad
+
+CREATE TABLE partida_habilidades (
+    partida_id INT NOT NULL,              -- ID de la partida
+    habilidad_id VARCHAR(50) REFERENCES habilidades(habilidad_id) ON DELETE CASCADE,
+    fecha_desbloqueo TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (partida_id, habilidad_id)
+);
