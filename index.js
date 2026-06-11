@@ -538,6 +538,195 @@ app.get('/api/paises-base', async (req, res) => {
   }
 });
 
+// =============================================================================
+// 13. GET /api/tropas — Obtener catálogo unificado de tropas
+// =============================================================================
+app.get('/api/tropas', async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        t.tropa_id AS id,
+        t.nombre_tropa AS nombre,
+        t.costo_base AS "costoBase",
+        t.multiplicador_combate AS "multiplicadorCombate",
+        CASE 
+          WHEN i.tropa_id IS NOT NULL THEN 'infanteria'
+          WHEN c.tropa_id IS NOT NULL THEN 'caballeria'
+          WHEN a.tropa_id IS NOT NULL THEN 'artilleria'
+        END AS subtipo,
+        COALESCE(i.bono_defensa_trinchera, c.bono_ataque_flanqueo, a.bono_perforacion_plasma, 0.0) AS bono
+      FROM tropas t
+      LEFT JOIN infanterias i ON t.tropa_id = i.tropa_id
+      LEFT JOIN caballerias c ON t.tropa_id = c.tropa_id
+      LEFT JOIN artillerias a ON t.tropa_id = a.tropa_id
+      ORDER BY t.tropa_id
+    `;
+    const result = await pool.query(query);
+    const tropas = result.rows.map(row => ({
+      id: row.id,
+      nombre: row.nombre,
+      costoBase: parseInt(row.costoBase, 10),
+      multiplicadorCombate: parseFloat(row.multiplicadorCombate),
+      subtipo: row.subtipo,
+      bono: parseFloat(row.bono)
+    }));
+    res.json(tropas);
+  } catch (error) {
+    console.error('❌ Error en GET /api/tropas:', error.message);
+    res.status(500).json({ error: 'Error interno al obtener el catálogo de tropas.', detail: error.message });
+  }
+});
+
+// =============================================================================
+// 14. POST /api/tropas/crear — Registro transaccional atómico de tropas
+// =============================================================================
+app.post('/api/tropas/crear', async (req, res) => {
+  const { nombre, costoBase, multiplicadorCombate, subtipo, bono } = req.body;
+
+  // Validaciones básicas de negocio/dominio
+  if (!nombre || typeof nombre !== 'string' || nombre.trim() === '') {
+    return res.status(400).json({ success: false, error: 'El nombre de la tropa es obligatorio.' });
+  }
+  if (nombre.length > 50) {
+    return res.status(400).json({ success: false, error: 'El nombre de la tropa no puede superar los 50 caracteres.' });
+  }
+  const costo = parseInt(costoBase, 10);
+  if (isNaN(costo) || costo <= 0) {
+    return res.status(400).json({ success: false, error: 'El costo base debe ser un número entero mayor que 0.' });
+  }
+  const mult = parseFloat(multiplicadorCombate);
+  if (isNaN(mult) || mult < 0.0) {
+    return res.status(400).json({ success: false, error: 'El multiplicador de combate debe ser un número mayor o igual que 0.0.' });
+  }
+  const allowedSubtypes = ['infanteria', 'caballeria', 'artilleria'];
+  if (!allowedSubtypes.includes(subtipo)) {
+    return res.status(400).json({ success: false, error: 'El subtipo debe ser uno de: infanteria, caballeria, artilleria.' });
+  }
+  const bonoVal = parseFloat(bono);
+  if (isNaN(bonoVal) || bonoVal < 0.0) {
+    return res.status(400).json({ success: false, error: 'El bono de especialización debe ser un número mayor o igual que 0.0.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Insertar en tabla maestra 'tropas'
+    const insertTropaQuery = `
+      INSERT INTO tropas (nombre_tropa, costo_base, multiplicador_combate)
+      VALUES ($1, $2, $3)
+      RETURNING tropa_id
+    `;
+    const tropaResult = await client.query(insertTropaQuery, [nombre.trim(), costo, mult]);
+    const newTropaId = tropaResult.rows[0].tropa_id;
+
+    // 2. Insertar en tabla hija correspondiente según subtipo
+    let childQuery;
+    if (subtipo === 'infanteria') {
+      childQuery = `
+        INSERT INTO infanterias (tropa_id, bono_defensa_trinchera)
+        VALUES ($1, $2)
+      `;
+    } else if (subtipo === 'caballeria') {
+      childQuery = `
+        INSERT INTO caballerias (tropa_id, bono_ataque_flanqueo)
+        VALUES ($1, $2)
+      `;
+    } else {
+      childQuery = `
+        INSERT INTO artillerias (tropa_id, bono_perforacion_plasma)
+        VALUES ($1, $2)
+      `;
+    }
+
+    await client.query(childQuery, [newTropaId, bonoVal]);
+
+    await client.query('COMMIT');
+
+    res.status(201).json({
+      success: true,
+      message: `Tropa '${nombre}' registrada con éxito.`,
+      data: {
+        id: newTropaId,
+        nombre: nombre.trim(),
+        costoBase: costo,
+        multiplicadorCombate: mult,
+        subtipo,
+        bono: bonoVal
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('❌ Error en transacción POST /api/tropas/crear:', error.message);
+    
+    // Manejo de error por nombre duplicado (Unique Violation)
+    if (error.code === '23505') {
+      return res.status(400).json({
+        success: false,
+        error: 'UNIQUE_VIOLATION',
+        message: `Ya existe una tropa registrada con el nombre '${nombre}'.`
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Error interno en la creación transaccional de tropa.',
+      detail: error.message
+    });
+  } finally {
+    client.release();
+  }
+});
+
+// =============================================================================
+// 15. GET /api/tropas/reportes/logistica — Agregación analítica distributiva
+// =============================================================================
+app.get('/api/tropas/reportes/logistica', async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        CASE 
+          WHEN i.tropa_id IS NOT NULL THEN 'Infantería'
+          WHEN c.tropa_id IS NOT NULL THEN 'Caballería'
+          WHEN a.tropa_id IS NOT NULL THEN 'Artillería'
+          ELSE 'Sin Clasificar'
+        END AS division,
+        COUNT(t.tropa_id) AS total_tropas,
+        ROUND(AVG(t.costo_base), 2) AS costo_promedio,
+        ROUND(AVG(t.multiplicador_combate), 2) AS multiplicador_combate_promedio,
+        MAX(t.costo_base) AS costo_maximo,
+        MIN(t.costo_base) AS costo_minimo
+      FROM tropas t
+      LEFT JOIN infanterias i ON t.tropa_id = i.tropa_id
+      LEFT JOIN caballerias c ON t.tropa_id = c.tropa_id
+      LEFT JOIN artillerias a ON t.tropa_id = a.tropa_id
+      GROUP BY 
+        CASE 
+          WHEN i.tropa_id IS NOT NULL THEN 'Infantería'
+          WHEN c.tropa_id IS NOT NULL THEN 'Caballería'
+          WHEN a.tropa_id IS NOT NULL THEN 'Artillería'
+          ELSE 'Sin Clasificar'
+        END
+      ORDER BY division
+    `;
+    const result = await pool.query(query);
+    
+    const reporte = result.rows.map(row => ({
+      division: row.division,
+      totalTropas: parseInt(row.total_tropas, 10),
+      costoPromedio: parseFloat(row.costo_promedio),
+      multiplicadorCombatePromedio: parseFloat(row.multiplicador_combate_promedio),
+      costoMaximo: parseInt(row.costo_maximo, 10),
+      costoMinimo: parseInt(row.costo_minimo, 10)
+    }));
+
+    res.json(reporte);
+  } catch (error) {
+    console.error('❌ Error en GET /api/tropas/reportes/logistica:', error.message);
+    res.status(500).json({ error: 'Error interno al generar reporte de logística.', detail: error.message });
+  }
+});
+
 // Arrancar servidor
 app.listen(PORT, () => {
   console.log(`🚀 Servidor Conquest escuchando en http://localhost:${PORT}`);
@@ -545,4 +734,7 @@ app.listen(PORT, () => {
   console.log(`🌲 Tech Tree:                         http://localhost:${PORT}/api/habilidades`);
   console.log(`🔓 Desbloquear habilidad:             POST http://localhost:${PORT}/api/partidas/:id/habilidades/desbloquear`);
   console.log(`🗺️  Países Base:                       http://localhost:${PORT}/api/paises-base`);
+  console.log(`🪖  Catálogo de Tropas:               GET http://localhost:${PORT}/api/tropas`);
+  console.log(`🛡️  Crear Tropa:                      POST http://localhost:${PORT}/api/tropas/crear`);
+  console.log(`📊 Reporte Logística de Tropas:       GET http://localhost:${PORT}/api/tropas/reportes/logistica`);
 });
