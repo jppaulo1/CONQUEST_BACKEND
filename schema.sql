@@ -119,3 +119,29 @@ CREATE TABLE
         arbol_id SERIAL PRIMARY KEY,
         nombre_arbol VARCHAR(50) NOT NULL UNIQUE
     );
+
+-- Tropas
+CREATE TABLE tropas (
+    tropa_id SERIAL PRIMARY KEY,
+    nombre_tropa VARCHAR(50) NOT NULL UNIQUE,
+    costo_base INT NOT NULL CHECK (costo_base > 0),
+    multiplicador_combate NUMERIC(3,1) NOT NULL CHECK (multiplicador_combate >= 0.0)
+);
+
+-- Tabla Hija: Infantería
+CREATE TABLE infanterias (
+    tropa_id INT PRIMARY KEY REFERENCES tropas(tropa_id) ON DELETE CASCADE,
+    bono_defensa_trinchera NUMERIC(3,1) DEFAULT 0.0 NOT NULL CHECK (bono_defensa_trinchera >= 0.0)
+);
+
+-- Tabla Hija: Caballería
+CREATE TABLE caballerias (
+    tropa_id INT PRIMARY KEY REFERENCES tropas(tropa_id) ON DELETE CASCADE,
+    bono_ataque_flanqueo NUMERIC(3,1) DEFAULT 0.0 NOT NULL CHECK (bono_ataque_flanqueo >= 0.0)
+);
+
+-- Tabla Hija: Artillería
+CREATE TABLE artillerias (
+    tropa_id INT PRIMARY KEY REFERENCES tropas(tropa_id) ON DELETE CASCADE,
+    bono_perforacion_plasma NUMERIC(3,1) DEFAULT 0.0 NOT NULL CHECK (bono_perforacion_plasma >= 0.0)
+);
