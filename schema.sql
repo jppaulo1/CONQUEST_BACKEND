@@ -24,3 +24,9 @@ CREATE TABLE partida_habilidades (
     fecha_desbloqueo TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (partida_id, habilidad_id)
 );
+
+-- Tipos de árbol
+CREATE TABLE arbol_habilidades (
+    arbol_id SERIAL PRIMARY KEY,
+    nombre_arbol VARCHAR(50) NOT NULL UNIQUE
+);
