@@ -1,34 +1,50 @@
--- ============================================================
--- SCRIPT DE POBLADO: 04_seed_tropas.sql
--- Inserción de tropas base y sincronización de secuencia
--- ============================================================
+INSERT INTO
+    tropas (
+        tropa_id,
+        nombre_tropa,
+        costo_base,
+        multiplicador_combate
+    )
+VALUES
+    (1, 'Cibersoldado de Asalto', 15, 1.0),
+    (2, 'Guardia de Neo-Tokio', 25, 1.2),
+    (3, 'Motorista de Asalto Cyber', 45, 1.5),
+    (4, 'Nómada del Desierto', 60, 1.8),
+    (5, 'Cañón de Plasma Pesado', 120, 3.0),
+    (6, 'Meca de Asedio Goliath', 250, 4.0),
+    (7, 'Recluta con Escudo', 10, 0.9),
+    (8, 'Espía Holográfico', 35, 1.1),
+    (9, 'Exo-Soldado Pesado', 50, 1.6),
+    (10, 'Cazador en Monorrueda', 55, 1.4),
+    (11, 'Jinete de Neodraco', 90, 2.2),
+    (12, 'Flanqueador Veloz', 40, 1.3),
+    (13, 'Lanzamisiles Enjambre', 150, 3.2),
+    (14, 'Mortero de Pulso EMP', 110, 2.5),
+    (15, 'Batería de Riel Magnético', 300, 5.0);
 
--- Limpiar datos previos si existen (gracias a CASCADE se limpian las tablas hijas)
-TRUNCATE TABLE tropas CASCADE;
+INSERT INTO
+    infanterias (tropa_id, bono_defensa_trinchera)
+VALUES
+    (1, 1.5),
+    (2, 2.0),
+    (7, 2.5),
+    (8, 1.2),
+    (9, 3.0);
 
--- 1. Insertar Tropas Maestras
-INSERT INTO tropas (tropa_id, nombre_tropa, costo_base, multiplicador_combate) VALUES
-(1, 'Cibersoldado de Asalto', 15, 1.0),
-(2, 'Guardia de Neo-Tokio', 25, 1.2),
-(3, 'Motorista de Asalto Cyber', 45, 1.5),
-(4, 'Nómada del Desierto', 60, 1.8),
-(5, 'Cañón de Plasma Pesado', 120, 3.0),
-(6, 'Meca de Asedio Goliath', 250, 4.0);
+INSERT INTO
+    caballerias (tropa_id, bono_ataque_flanqueo)
+VALUES
+    (3, 2.5),
+    (4, 3.5),
+    (10, 2.0),
+    (11, 4.0),
+    (12, 1.8);
 
--- 2. Insertar en tabla hija: Infanterías (bono_defensa_trinchera)
-INSERT INTO infanterias (tropa_id, bono_defensa_trinchera) VALUES
-(1, 1.5),
-(2, 2.0);
-
--- 3. Insertar en tabla hija: Caballerías (bono_ataque_flanqueo)
-INSERT INTO caballerias (tropa_id, bono_ataque_flanqueo) VALUES
-(3, 2.5),
-(4, 3.5);
-
--- 4. Insertar en tabla hija: Artillerías (bono_perforacion_plasma)
-INSERT INTO artillerias (tropa_id, bono_perforacion_plasma) VALUES
-(5, 4.5),
-(6, 6.0);
-
--- 5. Sincronizar la secuencia de la llave primaria para evitar errores en futuros inserts manuales
-SELECT setval('tropas_tropa_id_seq', (SELECT COALESCE(MAX(tropa_id), 1) FROM tropas));
+INSERT INTO
+    artillerias (tropa_id, bono_perforacion_plasma)
+VALUES
+    (5, 4.5),
+    (6, 6.0),
+    (13, 5.0),
+    (14, 3.8),
+    (15, 7.5);
