@@ -113,13 +113,6 @@ CREATE TABLE
             PRIMARY KEY (partida_id, habilidad_id)
     );
 
--- Tipos de árbol
-CREATE TABLE
-    arbol_habilidades (
-        arbol_id SERIAL PRIMARY KEY,
-        nombre_arbol VARCHAR(50) NOT NULL UNIQUE
-    );
-
 -- Tropas
 CREATE TABLE tropas (
     tropa_id SERIAL PRIMARY KEY,
